@@ -55,7 +55,7 @@ CMD_SET_DEVICE_SN       = 0x47
 CMD_GET_DEVICE_TYPE     = 0x48
 CMD_SET_DEVICE_TYPE     = 0x49
 
-CMD_CLEAR_RECORDS       = 0x4e
+CMD_CLEAR_RECORDS       = 0x4e  # borra el registro en el reloj, no usar
 
 # crc16 bits
 _crc_table = (

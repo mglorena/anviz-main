@@ -11,6 +11,7 @@ import os
 import sys
 import argparse
 import MySQLdb
+import pandas as pd
 import configparser
 from datetime import datetime
 from collections import namedtuple
@@ -337,6 +338,55 @@ class Device(object):
         # cancelled = struct.unpack(">L", left_fill(data, 4))[0]
         # return cancelled
 
+    def conectTapeUsers(self):
+        # Conectar a la base de datos remota
+        db_remote = MySQLdb.connect(str(config.get('databaseRemote', 'host')),
+                            str(config.get('databaseRemote', 'username')),
+                            str(config.get('databaseRemote', 'password')),
+                            str(config.get('databaseRemote', 'dbname')))
+        cursor_remote = db_remote.cursor()
+
+        # Seleccionar los datos de la tabla Personas
+        sql = "SELECT * FROM Personas"
+        cursor_remote.execute(sql)
+        data = cursor_remote.fetchall()
+
+        # Crear un DataFrame de pandas con los datos seleccionados
+        columns = [i[0] for i in cursor_remote.description]
+        df = pd.DataFrame(data, columns=columns)
+
+        # Conectar a la base de datos local
+        db_local = MySQLdb.connect(str(config.get('database', 'host')),
+                           str(config.get('database', 'username')),
+                           str(config.get('database', 'password')),
+                           str(config.get('database', 'dbname')))
+        cursor_local = db_local.cursor()
+
+        # Actualizar la tabla existente con los datos del DataFrame
+        for index, row in df.iterrows():
+            sql = "UPDATE MiTabla SET columna1=%s, columna2=%s WHERE id=%s"
+            cursor_local.execute(sql, (row['columna1'], row['columna2'], row['id']))
+
+        # Guardar los cambios en la base de datos local
+        db_local.commit()
+
+        # Cerrar las conexiones
+        cursor_remote.close()
+        db_remote.close()
+        cursor_local.close()
+        db_local.close()
+
+    def resetTable(self):
+        sql = "TRUNCATE TABLE `reloj`.`asistencia`;"
+    
+        try:
+            cursor.execute(sql)
+            db.commit()
+        except:
+            print("ERROR: SQL -> "+sql)
+   
+  
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Export Data from Anviz')
@@ -361,17 +411,17 @@ if __name__ == '__main__':
     config.sections()
     config.read(args.ini)
     filename = config.get('file', 'filename')
+    
     print("Connect to "+config.get('device', 'description')+" ID "+config.get('device', 'uniqueid')+" -> " +
           config.get('device', 'ipaddress')+":"+config.get('device', 'port')+" -> Output to "+str(config.get('output', 'type')))
+    
     anviz = Device(device_id=int(config.get('device', 'uniqueid')), ip_addr=str(
         config.get('device', 'ipaddress')), ip_port=int(config.get('device', 'port')))
     anviz.set_datetime(datetime.now())
-    # records = anviz.download_new_records()
     records = anviz.download_all_records()
-    # print(records)
     listrecords = list(records)
     total = len(listrecords)
-    # total = sum(1 for w in records)
+    
     print("New Record to Download: "+str(total))
     if str(config.get('output', 'type')) == "file":
         if os.path.isfile(config.get('file', 'filename')):
@@ -381,68 +431,76 @@ if __name__ == '__main__':
         db = MySQLdb.connect(str(config.get('database', 'host')), str(config.get('database', 'username')), str(
             config.get('database', 'password')), str(config.get('database', 'dbname')))
         cursor = db.cursor()
+        anviz.resetTable()
     for record in listrecords:
         strrec = str(record)
-        """
-        try:
-
-            column = strrec.split('=')
-            col1 = column[1].split(',')
-            legajo = col1[0]
-            col2 = column[2].split('(')
-            col21 = col2[1].split(')')
-            fh = col21[0].split(',')
-            diahora = fh[0]+"-"+fh[1].strip()+"-"+fh[2].strip() + \
-                ","+fh[3].strip()+":"+fh[4].strip()+":"+fh[5].strip()
-            col3 = column[3].split(',')
-            dbkp = col3[0]
-            col4 = column[4].split(',')
-            dtype = col4[0]
-            col5 = column[5].split(')')
-            dwork = col5[0]
-            drow = legajo+","+diahora+",BKP="+dbkp+",TYPE="+dtype+",WORK="+dwork
-        except Exception as ex:
-            #print("Primer error:")
-            print(ex)
-            #print(strrec)
-        """
         try:
 
                 strrec = strrec.replace("Record(", "").replace(
                     "datetime=datetime.datetime(", "(")
-                strrec = strrec.replace("0)", "0")
-                columns = strrec.split(',')
-                # print(columns)
-                # print(columns[1])
-                legajo = columns[0].replace("code=", "").strip()
-                anio = columns[1].replace("(", "").strip()
+                columns = strrec.replace("code=","").replace("bkp=", "").replace("type=", "").replace("work=", "").replace("(", "").replace(")", "").strip()
+                columns = columns.split(",")
+                legajo = columns[0].strip()
+                anio = columns[1].strip()
                 mes = columns[2].strip()
                 dia = columns[3].strip()
-                fecha = anio+"-"+mes+"-"+dia
+                hora = columns[4].strip()
                 min = columns[5].strip()
+                if (int(dia) < 10):
+                    dia = "0"+dia
+                if (int(mes) < 10):
+                    mes = "0"+mes
                 if (int(min) < 10):
                     min = "0"+min
-                hora = columns[4].strip()+":"+min
-                dbkp = columns[2].replace("bkp=", "").strip()
-                dtype = columns[3].replace("type=", "").strip()
-                dwork = columns[4].replace("type=", "").strip()
-                drow = legajo+","+diahora+",BKP="+dbkp+",TYPE="+dtype+",WORK="+dwork
-                print(drow)
+                
+                if (int(hora) < 10):
+                    hora = "0"+hora
+
+                fecha = anio+"-"+mes+"-"+dia
+                
+
+                if(len(columns)==10):
+                    dtype = columns[8]
+                    sec = columns[6].strip()
+                else:
+                    dtype = columns[7]
+                    sec ='0'
+                
+                if (int(sec) < 10):
+                    sec = "0"+sec
+                hora = hora +":"+min+":"+sec
+                drow = legajo+","+fecha+" "+hora+",TYPE="+dtype
+                #print(drow)
+                
         except Exception as ex2:
                 print("Segundo error:")
                 print(ex2)
-
+                print(strrec)
+                
         if str(config.get('output', 'type')) == "screen":
             print(drow)
         if str(config.get('output', 'type')) == "file":
             fileh.write(str(drow))
             fileh.write(str("\n"))
+        if str(config.get('output','type')) == "database":
+           
+            sql = "INSERT INTO `reloj`.`asistencia`(`Legajo`,`Fecha`,`Tipo`) VALUES ("
+            sql = sql+"'"+legajo+"','"+fecha+" "+ hora +"','"+dtype+"');"
+            try:
+               cursor.execute(sql)
+               db.commit()
+            except:
+               print("ERROR: SQL -> "+sql)
+               db.rollback()
+        
     if str(config.get('output', 'type')) == "file":
         fileh.close()
     if str(config.get('output', 'type')) == "database":
         db.close()
     print("Download Completed")
+    #print(anviz.download_staff_info())
     if config.get('output', 'markasread') == "yes" or config.get('output', 'markasread') == "true":
         # anviz.clear_records()
+        
         print("All Records marked as Read")
 

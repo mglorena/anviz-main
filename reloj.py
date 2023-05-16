@@ -376,25 +376,19 @@ class Device(object):
         cursor_local.close()
         db_local.close()
 
-    def resetTable(self):
+    def resetTable(self,cursor,db):
         sql = "TRUNCATE TABLE `reloj`.`asistencia`;"
     
         try:
             cursor.execute(sql)
+            while cursor.nextset():
+                pass
             db.commit()
         except:
             print("ERROR: SQL -> "+sql)
    
-  
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Export Data from Anviz')
-    parser.add_argument("ini", help="INI File Configuration", type=str)
-    args = parser.parse_args()
-    config = configparser.SafeConfigParser()
-    config.add_section('device')
-    config.set('device', 'uniqueid', '1')
+def init(args,config,db,cursor):  
+   
     testconfig = "[device]\nuniqueid = 1\nipaddress = 192.168.1.200\nport = 5010\n\n"
     testconfig = testconfig + \
         "[output]\ntitle = reader\ntype = screen\nmarkasread = yes\nusable = screen;file;database\n\n"
@@ -408,8 +402,7 @@ if __name__ == '__main__':
             configfile.write(testconfig)
         print("Create example ini file, use it for make a valid configuration.")
         exit()
-    config.sections()
-    config.read(args.ini)
+    
     filename = config.get('file', 'filename')
     
     print("Connect to "+config.get('device', 'description')+" ID "+config.get('device', 'uniqueid')+" -> " +
@@ -428,10 +421,7 @@ if __name__ == '__main__':
             os.remove(config.get('file', 'filename'))
         fileh = open(config.get('file', 'filename'), "w")
     if str(config.get('output', 'type')) == "database":
-        db = MySQLdb.connect(str(config.get('database', 'host')), str(config.get('database', 'username')), str(
-            config.get('database', 'password')), str(config.get('database', 'dbname')))
-        cursor = db.cursor()
-        anviz.resetTable()
+        anviz.resetTable(cursor,db)
     for record in listrecords:
         strrec = str(record)
         try:
@@ -488,6 +478,9 @@ if __name__ == '__main__':
             sql = sql+"'"+legajo+"','"+fecha+" "+ hora +"','"+dtype+"');"
             try:
                cursor.execute(sql)
+               while cursor.nextset():
+                    pass
+               
                db.commit()
             except:
                print("ERROR: SQL -> "+sql)
@@ -495,12 +488,179 @@ if __name__ == '__main__':
         
     if str(config.get('output', 'type')) == "file":
         fileh.close()
-    if str(config.get('output', 'type')) == "database":
-        db.close()
+    #if str(config.get('output', 'type')) == "database":
+    #    db.close()
     print("Download Completed")
     #print(anviz.download_staff_info())
     if config.get('output', 'markasread') == "yes" or config.get('output', 'markasread') == "true":
         # anviz.clear_records()
-        
         print("All Records marked as Read")
 
+def sendMailGmail(data,turno):
+    import yagmail
+
+    # Configurar la cuenta de correo electrónico
+    yag = yagmail.SMTP('sistema@oys.unsa.edu.ar', 'oysadmintape')
+
+    # Enviar el correo
+    yag.send(to='mlgarcia@unsa.edu.ar', subject='Asunto del correo GMAIL', contents='Contenido del correo')
+
+    # Cerrar la conexión SMTP
+    yag.close()
+
+def sendMailGmail2():
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    # Crear el objeto del correo
+    msg = MIMEMultipart()
+    msg['From'] = 'mlgarcia@unsa.edu.ar'
+    msg['To'] = 'informatica@oys.unsa.edu.ar'
+    msg['Subject'] = 'Asunto del correo'
+
+    # Agregar contenido al cuerpo del correo
+    body = 'Contenido del correo'
+    table_html = "<table cellpadding='2' cellspacin='2' style='width:30%;border:solid 0px black;'><tr><th style='border:1px solid black'>Nombre</th><th  style='border:1px solid black'>Legajo</th><th style='border:1px solid black'>CargoDesc</th><th style='border:1px solid black'>Categoria</th></tr></table>"
+    body += table_html
+    msg.attach(MIMEText(body, 'html'))
+
+    # Enviar el correo utilizando smtplib
+    with smtplib.SMTP('170.210.200.2', 25) as smtp:
+       # smtp.starttls()
+       # smtp.login('sistema@oys.unsa.edu.ar', 'oysadmintape')
+        smtp.send_message(msg)
+
+def createContent(data,turno):
+    fecha = datetime.now().date().strftime("%d-%m-%Y")
+    # Crear una tabla HTML con los datos de la lista de personas
+    table_html = "<table cellpadding='2' cellspacin='2' style='width:30%;border:solid 1px black;'><tr>"
+    table_html += "<th style='border:0px solid black'>Nombre</th>"
+    table_html += "<th  style='border:0px solid black'>Legajo</th>"
+    table_html += "<th style='border:0px solid black'>CargoDesc</th>"
+    table_html += "<th style='border:0px solid black'>Categoria</th></tr>"
+    for row in data:
+        table_html += '<tr>'
+        for col in row:
+            table_html += f'<td style="border:0px solid black">{col}</td>'
+        table_html += '</tr>'
+    table_html += '</table>'
+    if(turno=='M'):
+        turno ='Mañana'
+    else:
+        turno ='Tarde'
+    body = f'<h1>Parte Diario - Inasistencias del  día {fecha} </h1><br/><h2>Turno {turno}:</h2>\n\n{table_html}'
+    return body
+
+def sendMail(body):
+    
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    # Configura la información del correo electrónico
+    sender = 'mlgarcia@unsa.edu.ar'
+    recipient = 'informatica@oys.unsa.edu.ar'
+    fecha = datetime.now().date().strftime("%d-%m-%Y")
+    subject = f'Parte Diario - Día :  {fecha}'
+
+    # Crea el objeto del mensaje de correo electrónico
+    msg = MIMEMultipart()
+    msg['From'] = sender
+    msg['To'] = recipient
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'html'))
+
+
+    try:
+         # Enviar el correo utilizando smtplib
+        with smtplib.SMTP('170.210.200.2', 25) as smtp:
+            smtp.send_message(msg)
+        print('Correo electrónico enviado.')
+    except Exception as ex2:
+        print('Corre NO enviado')
+    
+
+    
+
+from datetime import datetime
+
+def get_turno_actual():
+    now = datetime.now()
+    hour = now.hour
+    if 9 <= hour < 13:
+        return 'M'
+    elif 15 <= hour < 18:
+        return 'T'
+    else:
+        return 'M'
+
+
+def sendReporteAsistencia(cursor,db):
+    turno_actual = get_turno_actual()
+
+    if turno_actual == 'M':
+        sql = "CALL personas_getReporte('M');"
+    elif turno_actual == 'T':
+        sql = "CALL personas_getReporte('T');"
+    else:
+        sql = "CALL personas_getReporte('M');"   
+    try:
+        cursor.execute(sql)
+        results = cursor.fetchall()
+        print(results)
+        while cursor.nextset():
+            pass
+        db.commit()
+    except:
+        print("ERROR: SQL -> "+sql)
+        db.rollback()
+  
+
+    # Convierte los resultados en una lista de listas
+    data = [list(row) for row in results]
+    body  = createContent(data,turno_actual)
+    sendMail(body)
+
+def sendReporte7horas(cursor,db):
+    turno_actual = get_turno_actual()
+
+    if turno_actual == 'M':
+        sql = "CALL personas_getReporte('M');"
+    elif turno_actual == 'T':
+        sql = "CALL personas_getReporte('T');"
+    else:
+        sql = "CALL personas_getReporte();"   
+    try:
+        cursor.execute(sql)
+        results = cursor.fetchall()
+        while cursor.nextset():
+            pass
+        db.commit()
+    except:
+        print("ERROR: SQL -> "+sql)
+        db.rollback()
+  
+
+    # Convierte los resultados en una lista de listas
+    data = [list(row) for row in results]
+    body  = createContent(data,turno_actual)
+    sendMail(body)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Export Data from Anviz')
+    parser.add_argument("ini", help="INI File Configuration", type=str)
+    args = parser.parse_args()
+    config = configparser.SafeConfigParser()
+    config.add_section('device')
+    config.set('device', 'uniqueid', '1')
+    config.sections()
+    config.read(args.ini)
+    db = MySQLdb.connect(str(config.get('database', 'host')), str(config.get('database', 'username')), str(
+    config.get('database', 'password')), str(config.get('database', 'dbname')))
+    cursor = db.cursor()
+    init(args,config,db,cursor)
+    sendReporteAsistencia(cursor,db)
+    #sendMailGmail2()
+    db.close()

@@ -534,15 +534,17 @@ def sendMailGmail2():
 def createContent(data,turno):
     fecha = datetime.now().date().strftime("%d-%m-%Y")
     # Crear una tabla HTML con los datos de la lista de personas
-    table_html = "<table cellpadding='2' cellspacin='2' style='width:30%;border:solid 1px black;'><tr>"
-    table_html += "<th style='border:0px solid black'>Nombre</th>"
-    table_html += "<th  style='border:0px solid black'>Legajo</th>"
-    table_html += "<th style='border:0px solid black'>CargoDesc</th>"
-    table_html += "<th style='border:0px solid black'>Categoria</th></tr>"
+    table_html = "<table style='border: 1px solid #87CEFA; border-collapse: collapse;'>"
+    table_html += "<tr>"
+    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Nombre</th>"
+    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Legajo</th>"
+    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Cargo</th>"
+    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Categoría</th>"
+    table_html += "</tr>"
     for row in data:
         table_html += '<tr>'
         for col in row:
-            table_html += f'<td style="border:0px solid black">{col}</td>'
+            table_html += f'<td style="color: #333; border: 1px solid #87CEFA;">{col}</td>'
         table_html += '</tr>'
     table_html += '</table>'
     if(turno=='M'):
@@ -560,7 +562,7 @@ def sendMail(body):
 
     # Configura la información del correo electrónico
     sender = 'mlgarcia@unsa.edu.ar'
-    recipient = 'informatica@oys.unsa.edu.ar'
+    recipient = 'personal@oys.unsa.edu.ar;informatica@oys.unsa.edu.ar'
     fecha = datetime.now().date().strftime("%d-%m-%Y")
     subject = f'Parte Diario - Día :  {fecha}'
 
@@ -588,9 +590,7 @@ from datetime import datetime
 def get_turno_actual():
     now = datetime.now()
     hour = now.hour
-    if 9 <= hour < 13:
-        return 'M'
-    elif 15 <= hour < 18:
+    if 15 <= hour < 18:
         return 'T'
     else:
         return 'M'
@@ -608,7 +608,7 @@ def sendReporteAsistencia(cursor,db):
     try:
         cursor.execute(sql)
         results = cursor.fetchall()
-        print(results)
+        #print(results)
         while cursor.nextset():
             pass
         db.commit()

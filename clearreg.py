@@ -251,7 +251,6 @@ class Device(object):
 
     def get_datetime(self):
         data = self._get_response(CMD_GET_DATETIME)
-        # print(data)
         y, m, d, h, mi, s = struct.unpack("B"*6, data)
         return datetime(2000+y, m, d, h, mi, s)
 
@@ -284,8 +283,9 @@ class Device(object):
         new_records = sum(struct.unpack(">BH", b_take(it, 3)))
         return RecordsInfo(users, fp, passwd, card, all_records, new_records)
 
-    def download_records(self, new=False):
+    def download_records(self, new=False):       
         info = self.get_record_info()
+        
         if new:
             total = info.new_records
             param = 2
@@ -293,10 +293,12 @@ class Device(object):
             total = info.all_records
             param = 1
         q = min([25, total])
+        
         data = self._get_response(CMD_DOWNLOAD_RECORDS, [param, q])
         for r in parse_records(data):
             yield r
         left = total - q
+        
         while left > 0:
             q = min([25, left])
             data = self._get_response(CMD_DOWNLOAD_RECORDS, [0, q])
@@ -305,7 +307,7 @@ class Device(object):
            # if new:
                 # self.clear_records(q)
             left = left - q
-
+        
     def download_all_records(self):
         return self.download_records(new=False)
 
@@ -386,7 +388,7 @@ class Device(object):
         except:
             print("ERROR: SQL -> "+sql)
    
-def init(args,config,db,cursor):  
+def init(args,config):  
    
     testconfig = "[device]\nuniqueid = 1\nipaddress = 192.168.1.200\nport = 5010\n\n"
     testconfig = testconfig + \
@@ -410,218 +412,29 @@ def init(args,config,db,cursor):
     anviz = Device(device_id=int(config.get('device', 'uniqueid')), ip_addr=str(
         config.get('device', 'ipaddress')), ip_port=int(config.get('device', 'port')))
     #anviz.set_datetime(datetime.now())
+    
     records = anviz.download_all_records()
+    
+    
     listrecords = list(records)
     total = len(listrecords)
     
     print("New Record to Download: "+str(total))
-    if str(config.get('output', 'type')) == "file":
-        if os.path.isfile(config.get('file', 'filename')):
-            os.remove(config.get('file', 'filename'))
-        fileh = open(config.get('file', 'filename'), "w")
-    if str(config.get('output', 'type')) == "database":
-        anviz.resetTable(cursor,db)
+    c=4
     for record in listrecords:
-        strrec = str(record)
-        try:
-
-                strrec = strrec.replace("Record(", "").replace(
-                    "datetime=datetime.datetime(", "(")
-                columns = strrec.replace("code=","").replace("bkp=", "").replace("type=", "").replace("work=", "").replace("(", "").replace(")", "").strip()
-                columns = columns.split(",")
-                legajo = columns[0].strip()
-                anio = columns[1].strip()
-                mes = columns[2].strip()
-                dia = columns[3].strip()
-                hora = columns[4].strip()
-                min = columns[5].strip()
-                if (int(dia) < 10):
-                    dia = "0"+dia
-                if (int(mes) < 10):
-                    mes = "0"+mes
-                if (int(min) < 10):
-                    min = "0"+min
-                
-                if (int(hora) < 10):
-                    hora = "0"+hora
-
-                fecha = anio+"-"+mes+"-"+dia
-                
-
-                if(len(columns)==10):
-                    dtype = columns[8]
-                    sec = columns[6].strip()
-                else:
-                    dtype = columns[7]
-                    sec ='0'
-                
-                if (int(sec) < 10):
-                    sec = "0"+sec
-                hora = hora +":"+min+":"+sec
-                drow = legajo+","+fecha+" "+hora+",TYPE="+dtype
-                #print(drow)
-                
-        except Exception as ex2:
-                print("Segundo error:")
-                print(ex2)
-                print(strrec)
-                
-        if str(config.get('output', 'type')) == "screen":
-            print(drow)
-        if str(config.get('output', 'type')) == "file":
-            fileh.write(str(drow))
-            fileh.write(str("\n"))
-        if str(config.get('output','type')) == "database":
-           
-            sql = "INSERT INTO `reloj`.`asistencia`(`Legajo`,`Fecha`,`Tipo`) VALUES ("
-            sql = sql+"'"+legajo+"','"+fecha+" "+ hora +"','"+dtype+"');"
-            try:
-               cursor.execute(sql)
-               while cursor.nextset():
-                    pass
-               
-               db.commit()
-            except:
-               print("ERROR: SQL -> "+sql)
-               db.rollback()
+        if (c > 4 ):
+            break;
         
-    if str(config.get('output', 'type')) == "file":
-        fileh.close()
-    #if str(config.get('output', 'type')) == "database":
-    #    db.close()
+        strrec = str(record)
+        print(strrec)
+        c+=c
+                
+        
     print("Download Completed")
     #print(anviz.download_staff_info())
     if config.get('output', 'markasread') == "yes" or config.get('output', 'markasread') == "true":
         # anviz.clear_records()
         print("All Records marked as Read")
-
-
-
-
-
-def createContent(data,turno, title,t1,t2,t3):
-    fecha = datetime.now().date().strftime("%d-%m-%Y")
-    # Crear una tabla HTML con los datos de la lista de personas
-    table_html = "<table cellspacing='4' cellpadding='4' style='border: 1px solid #87CEFA; border-collapse: collapse;'>"
-    table_html += "<tr>"
-    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Nombre</th>"
-    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Legajo</th>"
-    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Cargo</th>"
-    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Categoría</th>"
-    if(t1 == ""):
-        table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Articulo</th>"
-        table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Descripcion</th>"
-        table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Fecha Articulo</th>"
-    if(t1 != ""):
-        table_html += f'<th style="background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;"">{t1}</th>'
-        table_html += f'<th style="background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;"">{t2}</th>'
-        table_html += f'<th style="background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;"">{t3}</th>'
-    table_html += "</tr>"
-    for row in data:
-        table_html += '<tr>'
-        for col in row:
-            if (col =="None"): col=""
-            table_html += f'<td style="color: #333; border: 1px solid #87CEFA;">{col}</td>'
-        table_html += '</tr>'
-    table_html += '</table>'
-  
-    body = f'<h1>{title} - Fecha Reporte: {fecha} </h1><br/><h2>Turno {turno}:</h2>\n\n{table_html}'
-    return body
-
-def sendMail(body,title):
-    
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
-
-    # Configura la información del correo electrónico
-    sender = 'mlgarcia@unsa.edu.ar'
-    recipient = 'personal@oys.unsa.edu.ar;informatica@oys.unsa.edu.ar'
-    fecha = datetime.now().date().strftime("%d-%m-%Y")
-    subject = f'{title} -   {fecha}'
-
-    # Crea el objeto del mensaje de correo electrónico
-    msg = MIMEMultipart()
-    msg['From'] = sender
-    msg['To'] = recipient
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'html'))
-
-
-    try:
-         # Enviar el correo utilizando smtplib
-        with smtplib.SMTP('170.210.200.2', 25) as smtp:
-            smtp.send_message(msg)
-        print('Correo electrónico enviado.')
-    except Exception as ex2:
-        print('Corre NO enviado')
-    
-
-    
-
-from datetime import datetime
-
-def get_turno_actual():
-    now = datetime.now()
-    hour = now.hour
-    if 15 <= hour < 18:
-        return 'T'
-    else:
-        return 'M'
-
-
-def sendReporteAsistencia(cursor,db):
-    turno_actual = get_turno_actual()
-
-    if turno_actual == 'M':
-        sql = "CALL personas_getFullReport('M');"
-        turno_actual="Mañana"
-    elif turno_actual == 'T':
-        sql = "CALL personas_getFullReport('T');"
-        turno_actual="Tarde"
-    else:
-        sql = "CALL personas_getFullReport('M');"
-        turno_actual="Mañana"   
-    try:
-        cursor.execute(sql)
-        results = cursor.fetchall()
-        #print(results)
-        while cursor.nextset():
-            pass
-        db.commit()
-    except:
-        print("ERROR: SQL -> "+sql)
-        db.rollback()
-  
-
-    # Convierte los resultados en una lista de listas
-    data = [list(row) for row in results]
-    title ='Parte diario - Inasistencias '
-    body  = createContent(data,turno_actual,title,"","","")
-    sendMail(body,title)
-
-def sendReporte7horas(cursor,db):
-    #turno_actual = get_turno_actual()  
-    sql = "CALL personas_getReporteTarde();"
-    
-    try:
-        cursor.execute(sql)
-        results = cursor.fetchall()
-        while cursor.nextset():
-            pass
-        db.commit()
-    except:
-        print("ERROR: SQL -> "+sql)
-        db.rollback()
-  
-
-    # Convierte los resultados en una lista de listas
-    data = [list(row) for row in results]
-    turno_actual = "Todos"
-    title ='Horas cumplidas dia de ayer '
-    body  = createContent(data,turno_actual,title,"Entrada","Salida","Horas cumplidas")
-    sendMail(body,title)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Export Data from Anviz')
@@ -632,11 +445,12 @@ if __name__ == '__main__':
     config.set('device', 'uniqueid', '1')
     config.sections()
     config.read(args.ini)
-    db = MySQLdb.connect(str(config.get('database', 'host')), str(config.get('database', 'username')), str(
-    config.get('database', 'password')), str(config.get('database', 'dbname')))
-    cursor = db.cursor()
-    init(args,config,db,cursor)
-    sendReporteAsistencia(cursor,db)
-    sendReporte7horas(cursor,db)
- 
-    db.close()
+   # init(args,config)
+    amount = 25
+    args = [2] + list(struct.pack(">L", amount)[-3:])
+    print(args)
+        # data = self._get_response(CMD_CLEAR_RECORDS, args)
+        # cancelled = struct.unpack(">L", left_fill(data, 4))[0]
+        # return cancelled
+
+    

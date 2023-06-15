@@ -531,15 +531,19 @@ def sendMailGmail2():
        # smtp.login('sistema@oys.unsa.edu.ar', 'oysadmintape')
         smtp.send_message(msg)
 
-def createContent(data,turno):
+def createContent(data,turno, title,t1,t2,t3):
     fecha = datetime.now().date().strftime("%d-%m-%Y")
     # Crear una tabla HTML con los datos de la lista de personas
-    table_html = "<table style='border: 1px solid #87CEFA; border-collapse: collapse;'>"
+    table_html = "<table cellspacing='4' cellpadding='4' style='border: 1px solid #87CEFA; border-collapse: collapse;'>"
     table_html += "<tr>"
     table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Nombre</th>"
     table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Legajo</th>"
     table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Cargo</th>"
     table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Categoría</th>"
+    if(t1 != ""):
+        table_html += f'<th style="background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;"">{t1}</th>'
+        table_html += f'<th style="background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;"">{t2}</th>'
+        table_html += f'<th style="background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;"">{t3}</th>'
     table_html += "</tr>"
     for row in data:
         table_html += '<tr>'
@@ -547,14 +551,11 @@ def createContent(data,turno):
             table_html += f'<td style="color: #333; border: 1px solid #87CEFA;">{col}</td>'
         table_html += '</tr>'
     table_html += '</table>'
-    if(turno=='M'):
-        turno ='Mañana'
-    else:
-        turno ='Tarde'
-    body = f'<h1>Parte Diario - Inasistencias del  día {fecha} </h1><br/><h2>Turno {turno}:</h2>\n\n{table_html}'
+  
+    body = f'<h1>{title} - Fecha Reporte: {fecha} </h1><br/><h2>Turno {turno}:</h2>\n\n{table_html}'
     return body
 
-def sendMail(body):
+def sendMail(body,title):
     
     import smtplib
     from email.mime.text import MIMEText
@@ -562,9 +563,9 @@ def sendMail(body):
 
     # Configura la información del correo electrónico
     sender = 'mlgarcia@unsa.edu.ar'
-    recipient = 'personal@oys.unsa.edu.ar;informatica@oys.unsa.edu.ar'
+    recipient = 'informatica@oys.unsa.edu.ar'
     fecha = datetime.now().date().strftime("%d-%m-%Y")
-    subject = f'Parte Diario - Día :  {fecha}'
+    subject = f'{title} -   {fecha}'
 
     # Crea el objeto del mensaje de correo electrónico
     msg = MIMEMultipart()
@@ -601,10 +602,13 @@ def sendReporteAsistencia(cursor,db):
 
     if turno_actual == 'M':
         sql = "CALL personas_getReporte('M');"
+        turno_actual="Mañana"
     elif turno_actual == 'T':
         sql = "CALL personas_getReporte('T');"
+        turno_actual="Tarde"
     else:
-        sql = "CALL personas_getReporte('M');"   
+        sql = "CALL personas_getReporte('M');"
+        turno_actual="Mañana"   
     try:
         cursor.execute(sql)
         results = cursor.fetchall()
@@ -619,18 +623,14 @@ def sendReporteAsistencia(cursor,db):
 
     # Convierte los resultados en una lista de listas
     data = [list(row) for row in results]
-    body  = createContent(data,turno_actual)
-    sendMail(body)
+    title ='Parte diario - Inasistencias '
+    body  = createContent(data,turno_actual,title,"","","")
+    sendMail(body,title)
 
 def sendReporte7horas(cursor,db):
-    turno_actual = get_turno_actual()
-
-    if turno_actual == 'M':
-        sql = "CALL personas_getReporte('M');"
-    elif turno_actual == 'T':
-        sql = "CALL personas_getReporte('T');"
-    else:
-        sql = "CALL personas_getReporte();"   
+    #turno_actual = get_turno_actual()  
+    sql = "CALL personas_getReporteTarde();"
+    
     try:
         cursor.execute(sql)
         results = cursor.fetchall()
@@ -644,8 +644,10 @@ def sendReporte7horas(cursor,db):
 
     # Convierte los resultados en una lista de listas
     data = [list(row) for row in results]
-    body  = createContent(data,turno_actual)
-    sendMail(body)
+    turno_actual = "Todos"
+    title ='Horas cumplidas dia de ayer '
+    body  = createContent(data,turno_actual,title,"Entrada","Salida","Horas cumplidas")
+    sendMail(body,title)
 
 
 if __name__ == '__main__':
@@ -662,5 +664,6 @@ if __name__ == '__main__':
     cursor = db.cursor()
     init(args,config,db,cursor)
     sendReporteAsistencia(cursor,db)
+    sendReporte7horas(cursor,db)
     #sendMailGmail2()
     db.close()

@@ -1,18 +1,14 @@
 #!/usr/bin/python
 
 """
-    anviz
+    RELOJ DE OBRAS Y SERVICO MARCHA ANVIZ
+    SDK OFICIAL
+    MODIFICADO POR LORENA GARCIA
 """
 
 import socket
 import struct
 import itertools
-import os
-import sys
-import argparse
-import MySQLdb
-import pandas as pd
-import configparser
 from datetime import datetime
 from collections import namedtuple
 
@@ -213,7 +209,7 @@ class DeviceException(Exception):
     pass
 
 
-class Device(object):
+class Reloj(object):
 
     _connected = False
 
@@ -326,317 +322,14 @@ class Device(object):
             left = left - q
         return staff
 
-   # def clear_records(self, amount=None):
+    def clear_records(self, amount=None):
         # Only clear new record marks
-        # if amount is None:
-        #     args = [1] + list(b'\x00\x00\x00')
-        # else:
-        #     assert amount > 0
-        #     args = [2] + list(struct.pack(">L", amount)[-3:])
-        # data = self._get_response(CMD_CLEAR_RECORDS, args)
-        # cancelled = struct.unpack(">L", left_fill(data, 4))[0]
-        # return cancelled
+        if amount is None:
+             args = [1] + list(b'\x00\x00\x00')
+        else:
+             assert amount > 0
+             args = [2] + list(struct.pack(">L", amount)[-3:])
+        data = self._get_response(CMD_CLEAR_RECORDS, args)
+        cancelled = struct.unpack(">L", left_fill(data, 4))[0]
+        return cancelled
 
-    def conectTapeUsers(self):
-        # Conectar a la base de datos remota
-        db_remote = MySQLdb.connect(str(config.get('databaseRemote', 'host')),
-                            str(config.get('databaseRemote', 'username')),
-                            str(config.get('databaseRemote', 'password')),
-                            str(config.get('databaseRemote', 'dbname')))
-        cursor_remote = db_remote.cursor()
-
-        # Seleccionar los datos de la tabla Personas
-        sql = "SELECT * FROM Personas"
-        cursor_remote.execute(sql)
-        data = cursor_remote.fetchall()
-
-        # Crear un DataFrame de pandas con los datos seleccionados
-        columns = [i[0] for i in cursor_remote.description]
-        df = pd.DataFrame(data, columns=columns)
-
-        # Conectar a la base de datos local
-        db_local = MySQLdb.connect(str(config.get('database', 'host')),
-                           str(config.get('database', 'username')),
-                           str(config.get('database', 'password')),
-                           str(config.get('database', 'dbname')))
-        cursor_local = db_local.cursor()
-
-        # Actualizar la tabla existente con los datos del DataFrame
-        for index, row in df.iterrows():
-            sql = "UPDATE MiTabla SET columna1=%s, columna2=%s WHERE id=%s"
-            cursor_local.execute(sql, (row['columna1'], row['columna2'], row['id']))
-
-        # Guardar los cambios en la base de datos local
-        db_local.commit()
-
-        # Cerrar las conexiones
-        cursor_remote.close()
-        db_remote.close()
-        cursor_local.close()
-        db_local.close()
-
-    def resetTable(self,cursor,db):
-        sql = "TRUNCATE TABLE `reloj`.`asistencia`;"
-    
-        try:
-            cursor.execute(sql)
-            while cursor.nextset():
-                pass
-            db.commit()
-        except:
-            print("ERROR: SQL -> "+sql)
-   
-def init(args,config,db,cursor):  
-   
-    testconfig = "[device]\nuniqueid = 1\nipaddress = 192.168.1.200\nport = 5010\n\n"
-    testconfig = testconfig + \
-        "[output]\ntitle = reader\ntype = screen\nmarkasread = yes\nusable = screen;file;database\n\n"
-    testconfig = testconfig + "[screen]\nname = 0\n\n"
-    testconfig = testconfig + "[file]\nfilename = anviz.txt\n\n"
-    testconfig = testconfig + \
-        "[database]\nhost = localhost\nusername = usr\npassword = pwd\ndbname = dbname\ntablename = table\n\n"
-    if not os.path.isfile(args.ini):
-        print("ERROR: no INI file found as "+args.ini)
-        with open(args.ini, 'w') as configfile:
-            configfile.write(testconfig)
-        print("Create example ini file, use it for make a valid configuration.")
-        exit()
-    
-    filename = config.get('file', 'filename')
-    
-    print("Connect to "+config.get('device', 'description')+" ID "+config.get('device', 'uniqueid')+" -> " +
-          config.get('device', 'ipaddress')+":"+config.get('device', 'port')+" -> Output to "+str(config.get('output', 'type')))
-    
-    anviz = Device(device_id=int(config.get('device', 'uniqueid')), ip_addr=str(
-        config.get('device', 'ipaddress')), ip_port=int(config.get('device', 'port')))
-    #anviz.set_datetime(datetime.now())
-    records = anviz.download_all_records()
-    listrecords = list(records)
-    total = len(listrecords)
-    
-    print("New Record to Download: "+str(total))
-    if str(config.get('output', 'type')) == "file":
-        if os.path.isfile(config.get('file', 'filename')):
-            os.remove(config.get('file', 'filename'))
-        fileh = open(config.get('file', 'filename'), "w")
-    if str(config.get('output', 'type')) == "database":
-        anviz.resetTable(cursor,db)
-    for record in listrecords:
-        strrec = str(record)
-        try:
-
-                strrec = strrec.replace("Record(", "").replace(
-                    "datetime=datetime.datetime(", "(")
-                columns = strrec.replace("code=","").replace("bkp=", "").replace("type=", "").replace("work=", "").replace("(", "").replace(")", "").strip()
-                columns = columns.split(",")
-                legajo = columns[0].strip()
-                anio = columns[1].strip()
-                mes = columns[2].strip()
-                dia = columns[3].strip()
-                hora = columns[4].strip()
-                min = columns[5].strip()
-                if (int(dia) < 10):
-                    dia = "0"+dia
-                if (int(mes) < 10):
-                    mes = "0"+mes
-                if (int(min) < 10):
-                    min = "0"+min
-                
-                if (int(hora) < 10):
-                    hora = "0"+hora
-
-                fecha = anio+"-"+mes+"-"+dia
-                
-
-                if(len(columns)==10):
-                    dtype = columns[8]
-                    sec = columns[6].strip()
-                else:
-                    dtype = columns[7]
-                    sec ='0'
-                
-                if (int(sec) < 10):
-                    sec = "0"+sec
-                hora = hora +":"+min+":"+sec
-                drow = legajo+","+fecha+" "+hora+",TYPE="+dtype
-                #print(drow)
-                
-        except Exception as ex2:
-                print("Segundo error:")
-                print(ex2)
-                print(strrec)
-                
-        if str(config.get('output', 'type')) == "screen":
-            print(drow)
-        if str(config.get('output', 'type')) == "file":
-            fileh.write(str(drow))
-            fileh.write(str("\n"))
-        if str(config.get('output','type')) == "database":
-           
-            sql = "INSERT INTO `reloj`.`asistencia`(`Legajo`,`Fecha`,`Tipo`) VALUES ("
-            sql = sql+"'"+legajo+"','"+fecha+" "+ hora +"','"+dtype+"');"
-            try:
-               cursor.execute(sql)
-               while cursor.nextset():
-                    pass
-               
-               db.commit()
-            except:
-               print("ERROR: SQL -> "+sql)
-               db.rollback()
-        
-    if str(config.get('output', 'type')) == "file":
-        fileh.close()
-    #if str(config.get('output', 'type')) == "database":
-    #    db.close()
-    print("Download Completed")
-    #print(anviz.download_staff_info())
-    if config.get('output', 'markasread') == "yes" or config.get('output', 'markasread') == "true":
-        # anviz.clear_records()
-        print("All Records marked as Read")
-
-
-
-
-
-def createContent(data,turno, title,t1,t2,t3):
-    fecha = datetime.now().date().strftime("%d-%m-%Y")
-    # Crear una tabla HTML con los datos de la lista de personas
-    table_html = "<table cellspacing='4' cellpadding='4' style='border: 1px solid #87CEFA; border-collapse: collapse;'>"
-    table_html += "<tr>"
-    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Nombre</th>"
-    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Legajo</th>"
-    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Cargo</th>"
-    table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Categoría</th>"
-    if(t1 == ""):
-        table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Articulo</th>"
-        table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Descripcion</th>"
-        table_html += "<th style='background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;'>Fecha Articulo</th>"
-    if(t1 != ""):
-        table_html += f'<th style="background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;"">{t1}</th>'
-        table_html += f'<th style="background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;"">{t2}</th>'
-        table_html += f'<th style="background-color: #F0F0F0; text-align: center; border: 1px solid #87CEFA;"">{t3}</th>'
-    table_html += "</tr>"
-    for row in data:
-        table_html += '<tr>'
-        for col in row:
-            if (col =="None"): col=""
-            table_html += f'<td style="color: #333; border: 1px solid #87CEFA;">{col}</td>'
-        table_html += '</tr>'
-    table_html += '</table>'
-  
-    body = f'<h1>{title} - Fecha Reporte: {fecha} </h1><br/><h2>Turno {turno}:</h2>\n\n{table_html}'
-    return body
-
-def sendMail(body,title):
-    
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
-
-    # Configura la información del correo electrónico
-    sender = 'mlgarcia@unsa.edu.ar'
-    recipient = 'personal@oys.unsa.edu.ar;informatica@oys.unsa.edu.ar'
-    fecha = datetime.now().date().strftime("%d-%m-%Y")
-    subject = f'{title} -   {fecha}'
-
-    # Crea el objeto del mensaje de correo electrónico
-    msg = MIMEMultipart()
-    msg['From'] = sender
-    msg['To'] = recipient
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'html'))
-
-
-    try:
-         # Enviar el correo utilizando smtplib
-        with smtplib.SMTP('170.210.200.2', 25) as smtp:
-            smtp.send_message(msg)
-        print('Correo electrónico enviado.')
-    except Exception as ex2:
-        print('Corre NO enviado')
-    
-
-    
-
-from datetime import datetime
-
-def get_turno_actual():
-    now = datetime.now()
-    hour = now.hour
-    if 15 <= hour < 18:
-        return 'T'
-    else:
-        return 'M'
-
-
-def sendReporteAsistencia(cursor,db):
-    turno_actual = get_turno_actual()
-
-    if turno_actual == 'M':
-        sql = "CALL personas_getFullReport('M');"
-        turno_actual="Mañana"
-    elif turno_actual == 'T':
-        sql = "CALL personas_getFullReport('T');"
-        turno_actual="Tarde"
-    else:
-        sql = "CALL personas_getFullReport('M');"
-        turno_actual="Mañana"   
-    try:
-        cursor.execute(sql)
-        results = cursor.fetchall()
-        #print(results)
-        while cursor.nextset():
-            pass
-        db.commit()
-    except:
-        print("ERROR: SQL -> "+sql)
-        db.rollback()
-  
-
-    # Convierte los resultados en una lista de listas
-    data = [list(row) for row in results]
-    title ='Parte diario - Inasistencias '
-    body  = createContent(data,turno_actual,title,"","","")
-    sendMail(body,title)
-
-def sendReporte7horas(cursor,db):
-    #turno_actual = get_turno_actual()  
-    sql = "CALL personas_getReporteTarde();"
-    
-    try:
-        cursor.execute(sql)
-        results = cursor.fetchall()
-        while cursor.nextset():
-            pass
-        db.commit()
-    except:
-        print("ERROR: SQL -> "+sql)
-        db.rollback()
-  
-
-    # Convierte los resultados en una lista de listas
-    data = [list(row) for row in results]
-    turno_actual = "Todos"
-    title ='Horas cumplidas dia de ayer '
-    body  = createContent(data,turno_actual,title,"Entrada","Salida","Horas cumplidas")
-    sendMail(body,title)
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Export Data from Anviz')
-    parser.add_argument("ini", help="INI File Configuration", type=str)
-    args = parser.parse_args()
-    config = configparser.SafeConfigParser()
-    config.add_section('device')
-    config.set('device', 'uniqueid', '1')
-    config.sections()
-    config.read(args.ini)
-    db = MySQLdb.connect(str(config.get('database', 'host')), str(config.get('database', 'username')), str(
-    config.get('database', 'password')), str(config.get('database', 'dbname')))
-    cursor = db.cursor()
-    init(args,config,db,cursor)
-    sendReporteAsistencia(cursor,db)
-    sendReporte7horas(cursor,db)
- 
-    db.close()
